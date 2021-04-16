@@ -1,0 +1,76 @@
+# Static Configuration
+
+[providers.docker]
+  watch = true
+
+[api]
+  dashboard = true
+
+[ping]
+
+[log]
+  filePath = "log/traefik.log"
+  format = "json"
+  level = "DEBUG"
+
+[accessLog]
+  filePath = "log/access.log"
+  bufferingSize = 100
+
+[entryPoints]
+  [entryPoints.web]
+    address = ":80"
+    [entryPoints.web.http.redirections.entryPoint]
+      to = "web-secured"
+      scheme = "https"
+  [entryPoints.web-secured]
+    address = ":443"
+    [entryPoints.web-secured.http.tls]
+      certResolver = "myresolver"
+  [entryPoints.metrics]
+    address = ":8082"
+
+[certificatesResolvers.myresolver.acme]
+  email = "gcoos3@gmail.com"
+  storage = "acme.json"
+  # caServer = "https://acme-staging-v02.api.letsencrypt.org/directory"
+  caServer = "https://acme-v02.api.letsencrypt.org/directory"
+  [certificatesResolvers.myresolver.acme.httpChallenge]
+    entryPoint = "web"
+
+# TODO
+[http.routers]
+  [http.routers.router0]
+    rule = "Host(`hostname`)"
+    service = "web-service"
+    entrypoints = ["web"]
+    middlewares = ["https_redirect"]
+
+# TODO
+[http.routers.router1]
+    rule = "Host(`hostname`)"
+    service = "web-service"
+    entrypoints = ["web-secured"]
+    [http.routers.router1.tls]
+      certResolver = "myresolver"
+
+
+[http.middlewares]
+  [http.middlewares.https_redirect.redirectScheme]
+    scheme = "https"
+    permanent = true
+
+
+[tracing]
+  [tracing.zipkin]
+    httpEndpoint = "http://localhost:9411/api/v2/spans"
+    sameSpan = true
+    id128Bit = true
+    sampleRate = 1.0
+
+
+# [metrics]
+#   [metrics.prometheus]
+#     entryPoint = "metrics"
+#     buckets = [0.1,0.3,1.2,5.0]
+

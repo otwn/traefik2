@@ -1,0 +1,92 @@
+version: "3.3"
+
+services:
+  traefik2:
+    image: "traefik:2.2"
+    container_name: "traefik2"
+    restart: always
+    networks:
+      - traefik_net
+    command:
+      # Static Configuration
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entrypoint.to=web-secured"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.web-secured.address=:443"
+      - "--certificatesresolvers.myresolver.acme.email=gcoos3@gmail.com"
+      - "--certificatesresolvers.myresolver.acme.storage=acme.json"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080" # dashboard
+      - "8082:8082" # metric
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./letsencrypt/acme.json:/acme.json"
+      - "./log:/log"
+      - "./traefik.toml:/traefik.toml"
+    labels:
+      # Dynamic Configuration
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_net"
+      # Dashboard
+      - "traefik.http.services.traefik2.loadbalancer.server.port=8080"
+      - "traefik.http.routers.api.rule=(PathPrefix(`/api/`) || PathPrefix(`/dashboard/`))" # TODO
+      - "traefik.http.routers.api.service=api@internal"
+      - "traefik.http.routers.api.middlewares=auth"
+      - "traefik.http.middlewares.auth.basicauth.users=admin:$$apr1$$vxtD7Kj2$$InsuI8e3awOnez7oWSRrq."
+      # TLS
+      - "traefik.http.routers.traefik2.tls=true"
+      - "traefik.http.routers.traefik2.tls.certresolver=myresolver"
+      # IP whiteList
+      - "traefik.http.middlewares.ipwhitelist-prom.ipwhitelist.sourcerange=0.0.0.0/0"
+      - "traefik.http.middlewares.ipwhitelist-prom.ipwhitelist.ipStrategy.excludedIPs=10.0.0.1,10.0.0.2"
+      # inflightreq
+      - "traefik.http.middlewares.inflightreq-app.inflightreq.amount=10"
+      - "traefik.http.middlewares.inflightreq-app.inflightreq.sourcecriterion.ipstrategy.excludedips=127.0.0.1"
+      - "traefik.http.middlewares.inflightreq-app.inflightreq.sourcecriterion.requestheadername=X-Forwarded-Server"
+      - "traefik.http.middlewares.inflightreq-app.inflightreq.sourcecriterion.requesthost=true"
+      # ratelimit
+      - "traefik.http.middlewares.app-ratelimit.ratelimit.average=10"
+      - "traefik.http.middlewares.app-ratelimit.ratelimit.period=10s"
+      - "traefik.http.middlewares.app-ratelimit.ratelimit.burst=1"
+      - "traefik.http.middlewares.app-ratelimit.ratelimit.sourcecriterion.ipstrategy.excludedips=10.0.0.4"
+      - "traefik.http.middlewares.app-ratelimit.ratelimit.sourcecriterion.requestheadername=X-Real-Ip"
+      - "traefik.http.middlewares.app-ratelimit.ratelimit.sourcecriterion.requesthost=true"
+
+  storage:
+    image: openzipkin/zipkin-mysql
+    container_name: mysql
+    networks:
+      - traefik_net
+    ports:
+      - 3306:3306
+
+  zipkin:
+    image: openzipkin/zipkin
+    container_name: zipkin
+    restart: always
+    ports:
+      - 9411:9411
+    networks:
+      - traefik_net
+    environment:
+      - STORAGE_TYPE=mysql
+      - MYSQL_HOST=mysql
+    depends_on:
+      - storage
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_net"
+      - "traefik.http.services.zipkin.loadbalancer.server.port=9411"
+      - traefik.http.routers.zipkin.rule=PathPrefix(`/zipkin/`)
+      - "traefik.http.routers.zipkin.entrypoints=web-secured"
+      - "traefik.http.routers.zipkin.tls.certresolver=myresolver"
+      - "traefik.http.routers.zipkin.middlewares=zipkin-stripprefix"
+      - "traefik.http.middlewares.zipkin-stripprefix.stripprefix.prefixes=/zipkin/"
+
+networks:
+  traefik_net:
+    external: true
