@@ -1,37 +1,36 @@
-# Citizen Science Portal Proxy/Load Balancer
+# Proxy/Load Balancer
 
 ## Why?
 
 - HTTPS with Let's encrypt
 - Proxy
-- Automatically discover Docker stack containers (with labels)
-- This can be used any DO droplet with Docker
+- Automatically discover other Docker stack containers (without restarting. not like apache/nginx, no additional configuration on this repo required)
 
 ## What for
 
-This docker stack is a base for the Gulf Citizen Science portal server.
-https://gulfcitizenscience.org
+This docker stack is a base for any other docker stack on the same server.
 
-When correctly set up the "labels" section in docker-compose.yml for Docker Stack, Traefik automatically discovers containers and routes of subdirectories. Besides, Traefik redirects routes to https with Let's Encrypt. No restarting nor resetting a web server required. Traefik handles it
+If you want to add other docker stack (erddap, ncwms, flask/django/fastapi, vuejs, whatever) later, install this repo first. You don't touch this anymore. Only what you need is to configure docker-compose.yml on other docker stack by adding a label section.
+
+When you correctly set up the "labels" section in other docker-compose.yml, Traefik will discover other containers and routes of subdirectories when cotainers up. Besides, Traefik redirects routes to https with Let's Encrypt certificate. No restarting nor resetting is required. 
+
 
 ## Set up
 
 0. Docker must be installed
 1. Download this repo
 2. Install this at a new server/droplet
+   - \$ sh init.sh # create a docker network
+   - modify traefik.toml if needed (e.g. Hostname)
+   - generate .htpasswd or add the line into .htpasswd
    - \$ docker-compose up -d
-   - containers: traefik2, redis, mysql, whoami, nginx_data, zipkin
-   - install portainer and/or prometheus as needed
-   - https://domain.name/datasets: it shows the contents of ./nginx_data
-   - modify traefik.toml as needed (e.g. Host)
 
-3. Check if installed properly (https://domain.name/dashboard/)
+3. Check if installed properly (https://domain.name/dashboard/) with id & password stored in .htpasswd
+
 Treafik Dashboard
 ![Image of Traefik Dashboard](images/traefik22.png)
 
-## Install Data Portal and Frontend (Home page)
-1. Install backend service (https://github.com/GCOOS/CitizenScience_dataportal)
-2. Install the project home page with Dash/Plotly charts (https://github.com/GCOOS/CitizenScience_web)
+## THEN run other docker stack.
 
 ## Reference
 https://docs.traefik.io/user-guides/docker-compose/acme-tls/
